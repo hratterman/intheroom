@@ -1,5 +1,5 @@
 // background.js -- service worker
-// Routes messages between side panel and PiP window
+// Handles tab capture stream ID handoff and message routing
 
 let sessionState = {
   active: false,
@@ -8,14 +8,28 @@ let sessionState = {
   startedAt: null
 };
 
-// Open side panel on extension icon click
+// Open side panel when extension icon is clicked
 chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
   .catch(() => {});
 
-// Message router
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   switch (msg.type) {
+
+    // Side panel asks: get the tab capture stream ID for a specific tab
+    case 'GET_TAB_STREAM_ID': {
+      chrome.tabCapture.getMediaStreamId(
+        { targetTabId: msg.tabId },
+        (streamId) => {
+          if (chrome.runtime.lastError) {
+            sendResponse({ ok: false, error: chrome.runtime.lastError.message });
+          } else {
+            sendResponse({ ok: true, streamId });
+          }
+        }
+      );
+      return true; // async
+    }
 
     case 'SESSION_STARTED':
       sessionState = {
@@ -35,13 +49,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       break;
 
     case 'TRANSCRIPT_LINE': {
-      // From side panel -- store and broadcast to PiP
-      const entry = { text: msg.text, ts: Date.now(), isFinal: msg.isFinal };
+      const entry = { text: msg.text, speaker: msg.speaker, ts: Date.now(), isFinal: msg.isFinal };
       if (msg.isFinal) {
         sessionState.transcript.push(entry);
         chrome.storage.session.set({ sessionState });
       }
-      // Broadcast to any open PiP window
+      // Broadcast to PiP window (sidepanel forwards directly, but belt-and-suspenders)
       chrome.runtime.sendMessage({ type: 'TRANSCRIPT_LINE', ...msg }).catch(() => {});
       sendResponse({ ok: true });
       break;
@@ -63,5 +76,5 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       break;
   }
 
-  return true; // keep sendResponse alive for async
+  return true;
 });

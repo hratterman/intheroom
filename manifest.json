@@ -2,11 +2,12 @@
   "manifest_version": 3,
   "name": "In The Room",
   "version": "1.0.0",
-  "description": "Live meeting transcription with a floating panel. No account, no server, nothing leaves your machine.",
+  "description": "Live meeting transcription with speaker detection. Floats across every tab. No account, no server, nothing leaves your machine.",
   "permissions": [
     "activeTab",
     "storage",
-    "sidePanel"
+    "sidePanel",
+    "tabCapture"
   ],
   "host_permissions": [],
   "background": {
