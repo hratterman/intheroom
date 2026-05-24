@@ -1,26 +1,56 @@
-// background.js — service worker
-// Manages tab capture, speech recognition, and PiP window coordination
+// background.js -- service worker
+// Routes messages between side panel and PiP window
 
-let captureStream = null;
-let pipWindow = null;
-let recognitionPort = null;
 let sessionState = {
   active: false,
-  tabId: null,
   transcript: [],
   summary: null,
   startedAt: null
 };
 
-// ─── Message handler ───────────────────────────────────────────
+// Open side panel on extension icon click
+chrome.sidePanel
+  .setPanelBehavior({ openPanelOnActionClick: true })
+  .catch(() => {});
+
+// Message router
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   switch (msg.type) {
-    case 'START_SESSION':
-      startSession(msg.tabId).then(sendResponse);
-      return true; // async
 
-    case 'STOP_SESSION':
-      stopSession();
+    case 'SESSION_STARTED':
+      sessionState = {
+        active: true,
+        transcript: [],
+        summary: null,
+        startedAt: Date.now()
+      };
+      chrome.storage.session.set({ sessionState });
+      sendResponse({ ok: true });
+      break;
+
+    case 'SESSION_STOPPED':
+      sessionState.active = false;
+      chrome.storage.session.set({ sessionState });
+      sendResponse({ ok: true });
+      break;
+
+    case 'TRANSCRIPT_LINE': {
+      // From side panel -- store and broadcast to PiP
+      const entry = { text: msg.text, ts: Date.now(), isFinal: msg.isFinal };
+      if (msg.isFinal) {
+        sessionState.transcript.push(entry);
+        chrome.storage.session.set({ sessionState });
+      }
+      // Broadcast to any open PiP window
+      chrome.runtime.sendMessage({ type: 'TRANSCRIPT_LINE', ...msg }).catch(() => {});
+      sendResponse({ ok: true });
+      break;
+    }
+
+    case 'SUMMARY_UPDATE':
+      sessionState.summary = msg.summary;
+      chrome.storage.session.set({ sessionState });
+      chrome.runtime.sendMessage({ type: 'SUMMARY_UPDATE', summary: msg.summary }).catch(() => {});
       sendResponse({ ok: true });
       break;
 
@@ -28,55 +58,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse(sessionState);
       break;
 
-    case 'TRANSCRIPT_UPDATE':
-      // From the offscreen/pip window via port
-      if (msg.text) {
-        sessionState.transcript.push({
-          text: msg.text,
-          ts: Date.now(),
-          isFinal: msg.isFinal
-        });
-        // Broadcast to PiP window
-        broadcastToPip({ type: 'TRANSCRIPT_UPDATE', ...msg });
-      }
-      break;
-
-    case 'SUMMARY_UPDATE':
-      sessionState.summary = msg.summary;
-      broadcastToPip({ type: 'SUMMARY_UPDATE', summary: msg.summary });
-      break;
-
-    case 'COPY_TRANSCRIPT':
+    case 'GET_TRANSCRIPT':
       sendResponse({ transcript: sessionState.transcript });
       break;
   }
+
+  return true; // keep sendResponse alive for async
 });
-
-// ─── Start session ─────────────────────────────────────────────
-async function startSession(tabId) {
-  try {
-    sessionState = {
-      active: true,
-      tabId,
-      transcript: [],
-      summary: null,
-      startedAt: Date.now()
-    };
-    await chrome.storage.session.set({ sessionState });
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e.message };
-  }
-}
-
-// ─── Stop session ──────────────────────────────────────────────
-function stopSession() {
-  sessionState.active = false;
-  captureStream = null;
-  chrome.storage.session.set({ sessionState });
-}
-
-// ─── Broadcast to PiP ─────────────────────────────────────────
-function broadcastToPip(msg) {
-  chrome.runtime.sendMessage(msg).catch(() => {});
-}

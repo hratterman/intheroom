@@ -14,209 +14,73 @@
       --text: #f0f0f0;
       --muted: #666;
       --accent: #e2ff5d;
-      --red: #ff5f5f;
-      --green: #5fff8f;
     }
 
     body {
-      width: 320px;
+      width: 280px;
       background: var(--bg);
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       font-size: 13px;
       -webkit-font-smoothing: antialiased;
-    }
-
-    .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 18px 12px;
-      border-bottom: 1px solid var(--border);
+      padding: 18px;
     }
 
     .logo {
       font-size: 15px;
       font-weight: 700;
       letter-spacing: -0.3px;
-    }
-
-    .logo span {
-      color: var(--accent);
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--muted);
-      transition: background 0.3s;
-    }
-    .status-dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); }
-    .status-dot.error { background: var(--red); }
-
-    .body {
-      padding: 18px;
-    }
-
-    .meeting-info {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 12px 14px;
       margin-bottom: 14px;
     }
 
-    .meeting-label {
-      font-size: 11px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 4px;
-    }
+    .logo span { color: var(--accent); }
 
-    .meeting-name {
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+    .hint {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+      margin-bottom: 16px;
     }
 
     .btn {
       width: 100%;
       border: none;
       border-radius: 10px;
-      padding: 13px;
-      font-size: 14px;
+      padding: 12px;
+      font-size: 13px;
       font-weight: 600;
       cursor: pointer;
       font-family: inherit;
-      transition: opacity 0.15s, transform 0.1s;
-      letter-spacing: -0.2px;
-    }
-
-    .btn:active { transform: scale(0.98); }
-    .btn:disabled { opacity: 0.4; cursor: default; }
-
-    .btn-primary {
       background: var(--accent);
       color: #000;
+      transition: opacity 0.15s;
     }
 
-    .btn-danger {
-      background: transparent;
-      color: var(--red);
-      border: 1px solid var(--red);
-    }
+    .btn:hover { opacity: 0.88; }
 
-    .stats {
-      display: flex;
-      gap: 10px;
-      margin-top: 14px;
-    }
-
-    .stat {
-      flex: 1;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px;
-      text-align: center;
-    }
-
-    .stat-num {
-      font-size: 20px;
-      font-weight: 700;
-      color: var(--accent);
-    }
-
-    .stat-label {
-      font-size: 10px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.4px;
-      margin-top: 2px;
-    }
-
-    .open-pip-btn {
-      display: block;
-      width: 100%;
-      margin-top: 10px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 11px;
-      font-size: 13px;
-      color: var(--text);
-      text-align: center;
-      cursor: pointer;
-      font-family: inherit;
-      font-weight: 500;
-      transition: border-color 0.15s;
-    }
-    .open-pip-btn:hover { border-color: var(--accent); color: var(--accent); }
-
-    .notice {
-      margin-top: 14px;
+    .note {
+      margin-top: 12px;
       font-size: 11px;
       color: var(--muted);
-      line-height: 1.5;
       text-align: center;
-    }
-
-    .notice a { color: var(--muted); text-decoration: underline; }
-
-    #error-msg {
-      margin-top: 12px;
-      padding: 10px 12px;
-      background: rgba(255,95,95,0.1);
-      border: 1px solid rgba(255,95,95,0.3);
-      border-radius: 8px;
-      color: var(--red);
-      font-size: 12px;
       line-height: 1.4;
-      display: none;
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <div class="logo">in the <span>room</span></div>
-    <div class="status-dot" id="status-dot"></div>
-  </div>
+  <div class="logo">in the <span>room</span></div>
+  <div class="hint">Opens the side panel where you can start listening and launch the floating transcript window.</div>
+  <button class="btn" id="open-btn">Open Side Panel</button>
+  <div class="note">Works on Google Meet, Teams, and Zoom in browser.</div>
 
-  <div class="body">
-    <div class="meeting-info">
-      <div class="meeting-label">Current tab</div>
-      <div class="meeting-name" id="tab-name">—</div>
-    </div>
-
-    <button class="btn btn-primary" id="main-btn">Join Room</button>
-    <div id="error-msg"></div>
-
-    <div class="stats" id="stats" style="display:none;">
-      <div class="stat">
-        <div class="stat-num" id="stat-words">0</div>
-        <div class="stat-label">Words</div>
-      </div>
-      <div class="stat">
-        <div class="stat-num" id="stat-time">0:00</div>
-        <div class="stat-label">Duration</div>
-      </div>
-    </div>
-
-    <button class="open-pip-btn" id="pip-btn" style="display:none;">
-      ↗ Open floating panel
-    </button>
-
-    <div class="notice" id="idle-notice">
-      Works on Google Meet, Teams, and Zoom in browser.<br>
-      Audio never leaves your machine.
-    </div>
-  </div>
-
-  <script src="popup.js"></script>
+  <script>
+    document.getElementById('open-btn').addEventListener('click', function() {
+      chrome.sidePanel.open({ windowId: undefined }).catch(function() {
+        // Fallback: open as a tab
+        chrome.tabs.create({ url: chrome.runtime.getURL('sidepanel.html') });
+      });
+      window.close();
+    });
+  </script>
 </body>
 </html>

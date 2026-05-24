@@ -9,7 +9,6 @@
     :root {
       --bg: #0d0d0d;
       --surface: #161616;
-      --surface2: #1e1e1e;
       --border: #242424;
       --text: #f0f0f0;
       --muted: #555;
@@ -36,7 +35,7 @@
       height: 100vh;
     }
 
-    /* ─── Header ─── */
+    /* Header */
     .pip-header {
       display: flex;
       align-items: center;
@@ -56,14 +55,8 @@
 
     .pip-logo span { color: var(--accent); }
 
-    .pip-controls {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
     .listening-badge {
-      display: flex;
+      display: none;
       align-items: center;
       gap: 5px;
       font-size: 11px;
@@ -84,22 +77,7 @@
       50% { opacity: 0.3; }
     }
 
-    .pip-btn-sm {
-      background: none;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 4px 8px;
-      font-size: 11px;
-      color: var(--muted);
-      cursor: pointer;
-      font-family: inherit;
-      transition: all 0.15s;
-    }
-
-    .pip-btn-sm:hover { border-color: var(--accent); color: var(--accent); }
-    .pip-btn-sm.copied { border-color: var(--green); color: var(--green); }
-
-    /* ─── Tabs ─── */
+    /* Tabs */
     .tabs {
       display: flex;
       border-bottom: 1px solid var(--border);
@@ -125,12 +103,11 @@
       border-bottom-color: var(--accent);
     }
 
-    /* ─── Transcript ─── */
+    /* Transcript */
     #transcript-view {
       flex: 1;
       overflow-y: auto;
       padding: 12px 14px;
-      scroll-behavior: smooth;
     }
 
     #transcript-view::-webkit-scrollbar { width: 4px; }
@@ -140,16 +117,11 @@
     .transcript-line {
       padding: 5px 0;
       line-height: 1.55;
-      color: var(--text);
       border-bottom: 1px solid var(--border);
     }
 
     .transcript-line:last-child { border-bottom: none; }
-
-    .transcript-line.interim {
-      color: var(--muted);
-      font-style: italic;
-    }
+    .transcript-line.interim { color: var(--muted); font-style: italic; }
 
     .transcript-ts {
       font-size: 10px;
@@ -173,7 +145,7 @@
     .empty-title { font-size: 13px; font-weight: 500; color: var(--text); }
     .empty-sub { font-size: 12px; line-height: 1.5; }
 
-    /* ─── Summary ─── */
+    /* Summary */
     #summary-view {
       flex: 1;
       overflow-y: auto;
@@ -181,9 +153,7 @@
       display: none;
     }
 
-    .summary-section {
-      margin-bottom: 14px;
-    }
+    .summary-section { margin-bottom: 14px; }
 
     .summary-label {
       font-size: 10px;
@@ -201,7 +171,6 @@
       padding: 10px 12px;
       font-size: 12px;
       line-height: 1.6;
-      color: var(--text);
     }
 
     .summary-loading {
@@ -219,7 +188,7 @@
       margin-top: 8px;
     }
 
-    /* ─── Footer ─── */
+    /* Footer */
     .pip-footer {
       border-top: 1px solid var(--border);
       padding: 10px 14px;
@@ -229,11 +198,7 @@
       justify-content: space-between;
     }
 
-    .word-count {
-      font-size: 11px;
-      color: var(--dim);
-    }
-
+    .word-count { font-size: 11px; color: var(--dim); }
     .word-count span { color: var(--muted); }
 
     .copy-btn {
@@ -257,11 +222,9 @@
   <div id="app">
     <div class="pip-header">
       <div class="pip-logo">in the <span>room</span></div>
-      <div class="pip-controls">
-        <div class="listening-badge" id="listening-badge" style="display:none;">
-          <div class="listening-dot"></div>
-          Listening
-        </div>
+      <div class="listening-badge" id="listening-badge">
+        <div class="listening-dot"></div>
+        Listening
       </div>
     </div>
 
@@ -273,15 +236,15 @@
     <div id="transcript-view">
       <div class="empty-state" id="empty-state">
         <div class="empty-icon">🎙</div>
-        <div class="empty-title">Ready to listen</div>
-        <div class="empty-sub">Start speaking and your words<br>will appear here in real time.</div>
+        <div class="empty-title">Waiting for audio</div>
+        <div class="empty-sub">Start listening in the side panel<br>and your words appear here.</div>
       </div>
       <div id="transcript-lines"></div>
     </div>
 
     <div id="summary-view">
       <div class="summary-loading" id="summary-loading">
-        Summary updates every 2 minutes once transcription starts.
+        Summary updates every 2 minutes.
       </div>
       <div id="summary-content" style="display:none;">
         <div class="summary-section">
@@ -301,36 +264,25 @@
   </div>
 
   <script>
-    // ─── State ─────────────────────────────────────────────────
-    var recognition = null;
-    var finalTranscript = [];
-    var interimText = '';
+    var finalLines = [];
     var wordCount = 0;
-    var summaryInterval = null;
-    var summarizer = null;
-    var lastSummaryAt = null;
+    var interimEl = null;
     var currentTab = 'transcript';
 
-    // ─── Tab switching ─────────────────────────────────────────
+    // Tab switching
     document.querySelectorAll('.tab').forEach(function(tab) {
       tab.addEventListener('click', function() {
         document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
         tab.classList.add('active');
         currentTab = tab.dataset.tab;
-        document.getElementById('transcript-view').style.display = currentTab === 'transcript' ? 'flex' : 'none';
-        document.getElementById('transcript-view').style.flexDirection = 'column';
-        document.getElementById('summary-view').style.display = currentTab === 'summary' ? 'flex' : 'none';
-        document.getElementById('summary-view').style.flexDirection = 'column';
+        document.getElementById('transcript-view').style.display = currentTab === 'transcript' ? 'block' : 'none';
+        document.getElementById('summary-view').style.display = currentTab === 'summary' ? 'block' : 'none';
       });
     });
 
-    // Fix initial display
-    document.getElementById('transcript-view').style.display = 'flex';
-    document.getElementById('transcript-view').style.flexDirection = 'column';
-
-    // ─── Copy transcript ───────────────────────────────────────
+    // Copy button
     document.getElementById('copy-btn').addEventListener('click', function() {
-      var text = finalTranscript.join('\n\n');
+      var text = finalLines.join('\n\n');
       if (!text) return;
       navigator.clipboard.writeText(text).then(function() {
         var btn = document.getElementById('copy-btn');
@@ -343,140 +295,63 @@
       });
     });
 
-    // ─── Start transcription (called from popup) ───────────────
-    window.startTranscription = function(stream) {
-      document.getElementById('listening-badge').style.display = 'flex';
-      document.getElementById('empty-state').style.display = 'none';
-
-      // Wire audio stream into speech recognition via AudioContext
-      var ctx = new AudioContext();
-      var source = ctx.createMediaStreamSource(stream);
-
-      // We need to route stream audio to recognition
-      // Web Speech API needs microphone-like access, so we create a
-      // MediaStreamDestination and pipe our capture stream through it
-      var dest = ctx.createMediaStreamDestination();
-      source.connect(dest);
-
-      // Start speech recognition on the rerouted stream
-      startSpeechRecognition(dest.stream);
-
-      // Init summarizer
-      initSummarizer();
-
-      // Summary timer -- update every 2 minutes
-      summaryInterval = setInterval(function() {
-        if (finalTranscript.length > 0) generateSummary();
-      }, 120000);
+    // Called from sidepanel when PiP opens with existing content
+    window.replayTranscript = function(lines) {
+      lines.forEach(function(text) { appendFinalLine(text); });
     };
 
-    // ─── Speech Recognition ────────────────────────────────────
-    function startSpeechRecognition(stream) {
-      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        appendLine('[Speech recognition not supported in this browser]', true);
-        return;
+    // Called from sidepanel as new lines arrive
+    window.receiveTranscriptLine = function(text, isFinal) {
+      if (isFinal) {
+        appendFinalLine(text);
+      } else {
+        updateInterim(text);
       }
+    };
 
-      var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-      recognition.maxAlternatives = 1;
+    // Called from sidepanel when summary updates
+    window.receiveSummary = function(summary) {
+      document.getElementById('summary-loading').style.display = 'none';
+      document.getElementById('summary-content').style.display = 'block';
+      document.getElementById('summary-text').textContent = summary;
+      document.getElementById('summary-timer').textContent = 'Last updated ' + formatTime(new Date());
+    };
 
-      recognition.onresult = function(event) {
-        var interim = '';
-        for (var i = event.resultIndex; i < event.results.length; i++) {
-          var result = event.results[i];
-          if (result.isFinal) {
-            var text = result[0].transcript.trim();
-            if (text) {
-              finalTranscript.push(text);
-              wordCount += text.split(/\s+/).length;
-              appendLine(text, false);
-              updateWordCount();
-              notifyWordCount();
-            }
-          } else {
-            interim += result[0].transcript;
-          }
-        }
-        updateInterim(interim);
-      };
+    function appendFinalLine(text) {
+      document.getElementById('listening-badge').style.display = 'flex';
+      document.getElementById('empty-state').style.display = 'none';
+      if (interimEl) { interimEl.remove(); interimEl = null; }
+      finalLines.push(text);
+      wordCount += text.split(/\s+/).length;
+      document.getElementById('word-count-num').textContent = wordCount.toLocaleString();
 
-      recognition.onerror = function(event) {
-        if (event.error === 'no-speech') return; // normal, just silence
-        appendLine('[Recognition error: ' + event.error + ']', true);
-      };
-
-      recognition.onend = function() {
-        // Auto-restart unless user stopped
-        if (document.getElementById('listening-badge').style.display !== 'none') {
-          try { recognition.start(); } catch(e) {}
-        }
-      };
-
-      recognition.start();
-    }
-
-    // ─── Transcript rendering ──────────────────────────────────
-    var interimLineEl = null;
-
-    function appendLine(text, isError) {
       var container = document.getElementById('transcript-lines');
-
-      // Remove interim line if present
-      if (interimLineEl) {
-        interimLineEl.remove();
-        interimLineEl = null;
-      }
-
       var line = document.createElement('div');
-      line.className = 'transcript-line' + (isError ? ' interim' : '');
-
+      line.className = 'transcript-line';
       var ts = document.createElement('div');
       ts.className = 'transcript-ts';
       ts.textContent = formatTime(new Date());
       line.appendChild(ts);
-
-      var textNode = document.createTextNode(text);
-      line.appendChild(textNode);
-
+      line.appendChild(document.createTextNode(text));
       container.appendChild(line);
-
-      // Auto-scroll
       var view = document.getElementById('transcript-view');
       view.scrollTop = view.scrollHeight;
     }
 
     function updateInterim(text) {
+      document.getElementById('empty-state').style.display = 'none';
       var container = document.getElementById('transcript-lines');
-
       if (!text) {
-        if (interimLineEl) { interimLineEl.remove(); interimLineEl = null; }
+        if (interimEl) { interimEl.remove(); interimEl = null; }
         return;
       }
-
-      if (!interimLineEl) {
-        interimLineEl = document.createElement('div');
-        interimLineEl.className = 'transcript-line interim';
-        container.appendChild(interimLineEl);
+      if (!interimEl) {
+        interimEl = document.createElement('div');
+        interimEl.className = 'transcript-line interim';
+        container.appendChild(interimEl);
       }
-
-      interimLineEl.textContent = text;
-
-      var view = document.getElementById('transcript-view');
-      view.scrollTop = view.scrollHeight;
-    }
-
-    function updateWordCount() {
-      document.getElementById('word-count-num').textContent = wordCount.toLocaleString();
-    }
-
-    function notifyWordCount() {
-      try {
-        chrome.runtime.sendMessage({ type: 'WORD_COUNT_UPDATE', count: wordCount });
-      } catch(e) {}
+      interimEl.textContent = text;
+      document.getElementById('transcript-view').scrollTop = document.getElementById('transcript-view').scrollHeight;
     }
 
     function formatTime(date) {
@@ -485,62 +360,6 @@
       var ampm = h >= 12 ? 'pm' : 'am';
       h = h % 12 || 12;
       return h + ':' + m + ' ' + ampm;
-    }
-
-    // ─── Summarizer ────────────────────────────────────────────
-    async function initSummarizer() {
-      try {
-        if (window.ai && window.ai.summarizer) {
-          var capabilities = await window.ai.summarizer.capabilities();
-          if (capabilities.available !== 'no') {
-            summarizer = await window.ai.summarizer.create({
-              type: 'tl;dr',
-              format: 'plain-text',
-              length: 'medium'
-            });
-          }
-        }
-      } catch(e) {
-        // Summarizer not available -- will use extractive fallback
-        summarizer = null;
-      }
-    }
-
-    async function generateSummary() {
-      var text = finalTranscript.join(' ');
-      if (text.split(' ').length < 30) return; // not enough content yet
-
-      document.getElementById('summary-loading').style.display = 'none';
-      document.getElementById('summary-content').style.display = 'block';
-      document.getElementById('summary-text').textContent = 'Summarizing...';
-
-      try {
-        var summary;
-        if (summarizer) {
-          summary = await summarizer.summarize(text);
-        } else {
-          summary = extractiveSummary(text);
-        }
-
-        document.getElementById('summary-text').textContent = summary;
-        lastSummaryAt = new Date();
-        document.getElementById('summary-timer').textContent =
-          'Last updated ' + formatTime(lastSummaryAt);
-
-      } catch(e) {
-        document.getElementById('summary-text').textContent = extractiveSummary(text);
-      }
-    }
-
-    function extractiveSummary(text) {
-      // Simple extractive: take first sentence + last 2 sentences
-      var sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-      if (sentences.length <= 3) return sentences.join(' ');
-      return [
-        sentences[0],
-        sentences[Math.floor(sentences.length / 2)],
-        sentences[sentences.length - 1]
-      ].join(' ');
     }
   </script>
 </body>

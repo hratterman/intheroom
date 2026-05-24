@@ -2,12 +2,11 @@
   "manifest_version": 3,
   "name": "In The Room",
   "version": "1.0.0",
-  "description": "Live meeting transcription and AI summaries. Floats across every tab. No account, no server, nothing leaves your machine.",
+  "description": "Live meeting transcription with a floating panel. No account, no server, nothing leaves your machine.",
   "permissions": [
-    "tabCapture",
     "activeTab",
     "storage",
-    "scripting"
+    "sidePanel"
   ],
   "host_permissions": [],
   "background": {
@@ -16,6 +15,9 @@
   "action": {
     "default_popup": "popup.html",
     "default_title": "In The Room"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
   },
   "icons": {
     "16": "icons/icon16.png",
