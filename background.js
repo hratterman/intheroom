@@ -8,28 +8,51 @@ let sessionState = {
   startedAt: null
 };
 
-// Open side panel when extension icon is clicked
-chrome.sidePanel
-  .setPanelBehavior({ openPanelOnActionClick: true })
-  .catch(() => {});
+// Track the last tab the user was on when they opened the side panel
+let lastActiveTabId = null;
+
+// When extension icon is clicked, record which tab was active, then open side panel
+chrome.action.onClicked.addListener((tab) => {
+  lastActiveTabId = tab.id;
+  chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
+});
+
+// Also track tab activation so we always know the last real tab
+chrome.tabs.onActivated.addListener((info) => {
+  // Don't track the side panel itself (extension pages)
+  chrome.tabs.get(info.tabId, (tab) => {
+    if (tab && tab.url && !tab.url.startsWith('chrome-extension://') && !tab.url.startsWith('chrome://')) {
+      lastActiveTabId = info.tabId;
+    }
+  });
+});
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   switch (msg.type) {
 
     // Side panel asks: get the tab capture stream ID for a specific tab
     case 'GET_TAB_STREAM_ID': {
+      const targetTabId = msg.tabId || lastActiveTabId;
+      if (!targetTabId) {
+        sendResponse({ ok: false, error: 'No target tab identified. Click the extension icon on the meeting tab first.' });
+        return true;
+      }
       chrome.tabCapture.getMediaStreamId(
-        { targetTabId: msg.tabId },
+        { targetTabId },
         (streamId) => {
           if (chrome.runtime.lastError) {
             sendResponse({ ok: false, error: chrome.runtime.lastError.message });
           } else {
-            sendResponse({ ok: true, streamId });
+            sendResponse({ ok: true, streamId, tabId: targetTabId });
           }
         }
       );
-      return true; // async
+      return true;
     }
+
+    case 'GET_ACTIVE_TAB':
+      sendResponse({ tabId: lastActiveTabId });
+      break;
 
     case 'SESSION_STARTED':
       sessionState = {

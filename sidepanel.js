@@ -73,10 +73,11 @@ async function startListening() {
     if (!tab) throw new Error('No active tab found. Click the meeting tab first, then open the side panel.');
 
     // 2. Ask background for a tab capture stream ID
+    // background.js uses the last active non-extension tab it tracked
     const resp = await new Promise(resolve => {
-      chrome.runtime.sendMessage({ type: 'GET_TAB_STREAM_ID', tabId: tab.id }, resolve);
+      chrome.runtime.sendMessage({ type: 'GET_TAB_STREAM_ID' }, resolve);
     });
-    if (!resp || !resp.ok) throw new Error('Could not capture tab audio: ' + (resp && resp.error || 'unknown error'));
+    if (!resp || !resp.ok) throw new Error('Could not capture tab audio: ' + (resp && resp.error || 'unknown error') + '. Make sure you clicked the extension icon while on the meeting tab.');
     const streamId = resp.streamId;
 
     // 3. Get tab audio stream via getUserMedia with chromeMediaSourceId
