@@ -4,13 +4,12 @@
   "version": "1.0.0",
   "description": "Live meeting transcription with speaker detection. Floats across every tab. No account, no server, nothing leaves your machine.",
   "permissions": [
-    "activeTab",
     "storage",
     "sidePanel",
     "tabCapture",
     "tabs"
   ],
-  "host_permissions": [],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
   },
