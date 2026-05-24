@@ -60,47 +60,77 @@ document.getElementById('copy-btn').addEventListener('click', function() {
   });
 });
 
+// ── Tab audio acquisition (two paths) ────────────────────────────
+async function getTabAudioStream() {
+  // Path A: tabCapture (production) -- requires user clicked icon first
+  // Background.js caches the stream ID in action.onClicked handler.
+  const resp = await new Promise(resolve => {
+    chrome.runtime.sendMessage({ type: 'GET_TAB_STREAM_ID' }, (r) => {
+      resolve(r || null);
+    });
+  });
+
+  if (resp && resp.ok && resp.streamId) {
+    // Use the cached stream ID from the background
+    return navigator.mediaDevices.getUserMedia({
+      audio: {
+        mandatory: {
+          chromeMediaSource: 'tab',
+          chromeMediaSourceId: resp.streamId
+        }
+      },
+      video: false
+    });
+  }
+
+  // Path B: getDisplayMedia fallback -- works without activeTab gesture.
+  // Shows Chrome's "share this tab" picker once. Used when no stream ID is cached.
+  console.warn('[intheroom] No tabCapture stream ID -- falling back to getDisplayMedia');
+  let displayStream;
+  try {
+    displayStream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: true,
+      preferCurrentTab: false,  // false = show full tab picker so user picks meeting tab
+      selfBrowserSurface: 'include',
+      systemAudio: 'include'
+    });
+  } catch(err) {
+    throw new Error('Screen share cancelled or denied: ' + err.message);
+  }
+
+  // Extract audio-only stream (drop video track to save memory)
+  const audioTracks = displayStream.getAudioTracks();
+  console.log('[intheroom] getDisplayMedia tracks:', displayStream.getTracks().map(t => t.kind + ':' + t.label));
+  if (!audioTracks.length) {
+    displayStream.getTracks().forEach(t => t.stop());
+    throw new Error('No audio track captured. In the share picker, make sure to check "Share tab audio" and select the meeting tab.');
+  }
+  displayStream.getVideoTracks().forEach(t => t.stop());
+  return new MediaStream(audioTracks);
+}
+
 // ── Start listening ───────────────────────────────────────────────
 async function startListening() {
   showError(null);
   setBtn('loading');
 
   try {
-    // 1. Get the active meeting tab ID
-    const [tab] = await new Promise(resolve => {
-      chrome.tabs.query({ active: true, lastFocusedWindow: true }, resolve);
-    });
-    if (!tab) throw new Error('No active tab found. Click the meeting tab first, then open the side panel.');
+    // Get tab audio stream -- two paths:
+    // A) tabCapture path (production): background cached a stream ID when user clicked the icon
+    // B) getDisplayMedia path (fallback/test): shows "share this tab" picker, no gesture needed
+    const tabStream = await getTabAudioStream();
 
-    // 2. Ask background for a tab capture stream ID
-    // background.js uses the last active non-extension tab it tracked
-    const resp = await new Promise(resolve => {
-      chrome.runtime.sendMessage({ type: 'GET_TAB_STREAM_ID' }, resolve);
-    });
-    if (!resp || !resp.ok) throw new Error('Could not capture tab audio: ' + (resp && resp.error || 'unknown error') + '. Make sure you clicked the extension icon while on the meeting tab.');
-    const streamId = resp.streamId;
-
-    // 3. Get tab audio stream via getUserMedia with chromeMediaSourceId
-    const tabStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        mandatory: {
-          chromeMediaSource: 'tab',
-          chromeMediaSourceId: streamId
-        }
-      },
-      video: false
-    });
-
-    // 4. Load Whisper worker (downloads model first time)
+    // Load Whisper worker (downloads model first time)
     await loadWhisper();
 
-    // 5. Start Whisper pipeline on tab audio
+    // Start Whisper pipeline on tab audio
     startTabAudioPipeline(tabStream);
 
-    // 6. Start Web Speech API on mic
+    // Start Web Speech API on mic
     startMicRecognition();
 
-    // 7. Mark active
+    // Mark active
     setActive(true);
     chrome.runtime.sendMessage({ type: 'SESSION_STARTED' }).catch(() => {});
 

@@ -8,51 +8,52 @@ let sessionState = {
   startedAt: null
 };
 
-// Track the last tab the user was on when they opened the side panel
-let lastActiveTabId = null;
+// Stream ID obtained during user gesture (action click) -- valid for ~5s
+let pendingStreamId = null;
+let pendingStreamTabId = null;
+let pendingStreamAt = null;
 
-// When extension icon is clicked, record which tab was active, then open side panel
+// When extension icon is clicked, grab stream ID NOW (we're in a user gesture context)
+// then open the side panel
 chrome.action.onClicked.addListener((tab) => {
-  lastActiveTabId = tab.id;
-  chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
-});
-
-// Also track tab activation so we always know the last real tab
-chrome.tabs.onActivated.addListener((info) => {
-  // Don't track the side panel itself (extension pages)
-  chrome.tabs.get(info.tabId, (tab) => {
-    if (tab && tab.url && !tab.url.startsWith('chrome-extension://') && !tab.url.startsWith('chrome://')) {
-      lastActiveTabId = info.tabId;
+  // Get stream ID while we have the user gesture
+  chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id }, (streamId) => {
+    if (chrome.runtime.lastError) {
+      console.warn('[intheroom] tabCapture failed on click:', chrome.runtime.lastError.message);
+      pendingStreamId = null;
+      pendingStreamTabId = null;
+    } else {
+      pendingStreamId = streamId;
+      pendingStreamTabId = tab.id;
+      pendingStreamAt = Date.now();
     }
   });
+
+  // Open side panel
+  chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   switch (msg.type) {
 
-    // Side panel asks: get the tab capture stream ID for a specific tab
+    // Side panel asks for the cached stream ID
     case 'GET_TAB_STREAM_ID': {
-      const targetTabId = msg.tabId || lastActiveTabId;
-      if (!targetTabId) {
-        sendResponse({ ok: false, error: 'No target tab identified. Click the extension icon on the meeting tab first.' });
+      if (!pendingStreamId) {
+        sendResponse({ ok: false, error: 'No stream ID cached. Click the extension icon on the meeting tab to start.' });
         return true;
       }
-      chrome.tabCapture.getMediaStreamId(
-        { targetTabId },
-        (streamId) => {
-          if (chrome.runtime.lastError) {
-            sendResponse({ ok: false, error: chrome.runtime.lastError.message });
-          } else {
-            sendResponse({ ok: true, streamId, tabId: targetTabId });
-          }
-        }
-      );
+      // Stream IDs expire -- Chrome docs say they're valid briefly after creation
+      // If it's more than 10s old, warn but still try
+      const age = Date.now() - pendingStreamAt;
+      const id = pendingStreamId;
+      const tabId = pendingStreamTabId;
+      // Clear after handing off -- one-time use
+      pendingStreamId = null;
+      pendingStreamTabId = null;
+      pendingStreamAt = null;
+      sendResponse({ ok: true, streamId: id, tabId, age });
       return true;
     }
-
-    case 'GET_ACTIVE_TAB':
-      sendResponse({ tabId: lastActiveTabId });
-      break;
 
     case 'SESSION_STARTED':
       sessionState = {
@@ -77,7 +78,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sessionState.transcript.push(entry);
         chrome.storage.session.set({ sessionState });
       }
-      // Broadcast to PiP window (sidepanel forwards directly, but belt-and-suspenders)
       chrome.runtime.sendMessage({ type: 'TRANSCRIPT_LINE', ...msg }).catch(() => {});
       sendResponse({ ok: true });
       break;
